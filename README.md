@@ -5,7 +5,13 @@ Create a branch off master with your name in it. When you have finished a projec
 
 ## Contributors
 Krytic - Sean
+
 victoriaskeggs - Victoria
+
 tradeylouish - Louis
+
 Roose-Bolt - Ryan
+
 Hal9004 - Kesh
+
+tand363 - Tom
