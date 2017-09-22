@@ -4,6 +4,9 @@ Created by Louis Habberfield-Short, Spetember 9, 2017.
 Released into the public domain.
 */
 
+#include "Arduino.h"
+#include "SpyCamera.h"
+
 SpyCamera::SpyCamera(int pin)
 {
 	pinMode(pin, OUTPUT);
