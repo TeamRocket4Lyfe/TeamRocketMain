@@ -25,6 +25,7 @@ Adafruit_L3GD20_Unified gyro = Adafruit_L3GD20_Unified(20);
 Adafruit_BMP280 bmp;
 
 File logfile;
+char filename[15];
 
 void setup() {
 
@@ -36,12 +37,11 @@ void setup() {
   bool SDWorking = SD.begin(cardSelect);
 
   // Find unique name for data file
-  char filename[15];
-  strcpy(filename, "DATA00.csv");
+  strcpy(filename, "data00.csv");
   for (uint8_t i = 0; i < 100; i++) {
     filename[4] = '0' + i/10;
     filename[5] = '0' + i%10;
-    // create if does not exist, do not open existing, write, sync after write
+    // Create if does not exist, do not open existing, write, sync after write
     if (! SD.exists(filename)) {
       break;
     }
@@ -54,14 +54,17 @@ void setup() {
   }
 
   // Create headings in data file
-  logfile.print(F("TimeStamp(),Temperature(*C),Pressure(),AccelX(m/s^2),AccelY(m/s^2),")
-  logfile.println(F("AccelZ(m/s^2),MagX(uT),MagY(uT),MagZ(uT),GyroX(rad/s),GyroY(rad/s),GyroZ(rad/s),OriPitch(),OriRoll(),OriHeading()")); 
+  logfile.print(F("TimeStamp(ms),Temperature(*C),Pressure(Pa),AccelX(m/s^2),AccelY(m/s^2),")
+  logfile.println(F("AccelZ(m/s^2),MagX(uT),MagY(uT),MagZ(uT),GyroX(rad/s),GyroY(rad/s),GyroZ(rad/s),OriPitch,OriRoll,OriHeading")); 
+
+  // Close data file
+  logfile.close();
 }
 
 void loop() {
 
   // Initialise sensor variables
-  // TIMESTAMP???
+  unsigned long timestamp;
   float temp;
   int32_t pressure;
   float accelX;
@@ -76,6 +79,9 @@ void loop() {
   float roll;
   float pitch;
   float heading;
+
+  // Get a timestamp
+  timestamp = millis(); 
 
   // Take temperature and pressure readings if sensor is working
   if (bmpWorking) {
@@ -132,15 +138,10 @@ void loop() {
   }
 
   // Print collected data to file
+  logfile = SD.open(filename, FILE_WRITE);
   logfile.println(F(timeStamp,temp,pressure,accelX,accelY,magX,magY,magZ,gyroX,gyroY,gyroZ,pitch,roll,heading))
+  logfile.close(); // Save data
 
   // Delay 0.1 secs
   delay(100);
-
-  // After 20 secs of collecting data, close the file and do nothing
-  if (millis() >= 20000){
-    logfile.close();
-
-    while (1);
-  }
 }
