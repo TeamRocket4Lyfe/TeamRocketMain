@@ -10,8 +10,11 @@
 #include <Adafruit_L3GD20_U.h>
 #include <Adafruit_LSM303_U.h>
 
-// Set the pins used
+// Define constants
 #define cardSelect 10
+#define NUM_DATA 15
+
+// Set the pins used
 #define BMP_SCK 13
 #define BMP_MISO 12
 #define BMP_MOSI 11 
@@ -26,15 +29,52 @@ Adafruit_BMP280 bmp;
 
 File logfile;
 char filename[15];
+float timeStamp;
+
+// Initialise sensor working variables
+bool accelWorking;
+bool gyroWorking;
+bool magWorking;
+bool bmpWorking;
+bool SDWorking;
+
+struct accel_s {
+  float x;
+  float y;
+  float z;
+} accelReadings;
+
+struct mag_s {
+  float x;
+  float y;
+  float z;
+} magReadings;
+
+struct gyro_s {
+  float x;
+  float y;
+  float z;
+} gyroReadings;
+
+struct ori_s {
+  float oriRoll;
+  float oriPitch;
+  float oriHeading;
+} oriReadings;
+
+struct bmp_s {
+  float temp;
+  float pressure;
+} bmpReadings;
 
 void setup() {
 
   // Check sensors and SD card are functional
-  bool accelWorking = accel.begin();
-  bool gyroWorking = gyro.begin();
-  bool magWorking = mag.begin();
-  bool bmpWorking = bmp.begin();
-  bool SDWorking = SD.begin(cardSelect);
+  accelWorking = accel.begin();
+  gyroWorking = gyro.begin();
+  magWorking = mag.begin();
+  bmpWorking = bmp.begin();
+  SDWorking = SD.begin(cardSelect);
 
   // Find unique name for data file
   strcpy(filename, "data00.csv");
@@ -54,8 +94,8 @@ void setup() {
   }
 
   // Create headings in data file
-  logfile.print(F("TimeStamp(ms),Temperature(*C),Pressure(Pa),AccelX(m/s^2),AccelY(m/s^2),")
-  logfile.println(F("AccelZ(m/s^2),MagX(uT),MagY(uT),MagZ(uT),GyroX(rad/s),GyroY(rad/s),GyroZ(rad/s),OriPitch,OriRoll,OriHeading")); 
+  logfile.print("TimeStamp(ms),Temperature(*C),Pressure(Pa),AccelX(m/s^2),AccelY(m/s^2),");
+  logfile.println("AccelZ(m/s^2),MagX(uT),MagY(uT),MagZ(uT),GyroX(rad/s),GyroY(rad/s),GyroZ(rad/s),OriPitch,OriRoll,OriHeading"); 
 
   // Close data file
   logfile.close();
@@ -63,54 +103,41 @@ void setup() {
 
 void loop() {
 
-  // Initialise sensor variables
-  unsigned long timestamp;
-  float temp;
-  int32_t pressure;
-  float accelX;
-  float accelY;
-  float accelZ;
-  float magX;
-  float magY;
-  float magZ;
-  float gyroX;
-  float gyroY;
-  float gyroZ;
-  float roll;
-  float pitch;
-  float heading;
-
   // Get a timestamp
-  timestamp = millis(); 
+  timeStamp = millis(); 
 
   // Take temperature and pressure readings if sensor is working
   if (bmpWorking) {
-    temp = bmp.readTemperature();
-    pressure = bmp.readPressure();
+    bmpReadings.temp = bmp.readTemperature();
+    bmpReadings.pressure = (float) bmp.readPressure();
   }
+
+  // Allow accel event to be accessed later in the script
+  sensors_event_t accel_event;
   
   // Take acceleration readings if sensor is working
   if (accelWorking) {
     // Create acceleration event
-    sensors_event_t accel_event;
     accel.getEvent(&accel_event);
 
     // Take readings in 3 dimensions
-    accelX = accel_event.acceleration.x;
-    accelY = accel_event.acceleration.y;
-    accelZ = accel_event.acceleration.z;
+    accelReadings.x = accel_event.acceleration.x;
+    accelReadings.y = accel_event.acceleration.y;
+    accelReadings.z = accel_event.acceleration.z;
   }
+
+  // Allow magnetic event to be accessed later in the script
+  sensors_event_t mag_event;
 
   // Take magnetic field strength readings if sensor is working
   if (magWorking) {
     // Create event
-    sensors_event_t mag_event;
     mag.getEvent(&mag_event);
 
     // Take readings in 3 dimensions
-    magX = mag_event.magnetic.x;
-    magY = mag_event.magnetic.y;
-    magZ = mag_event.magnetic.z;
+    magReadings.x = mag_event.magnetic.x;
+    magReadings.y = mag_event.magnetic.y;
+    magReadings.z = mag_event.magnetic.z;
   }
 
   // Take gyroscopic readings if sensor is working
@@ -120,9 +147,9 @@ void loop() {
     gyro.getEvent(&gyro_event);
 
     // Take readings in 3 dimensions
-    gyroX = gyro_event.gyro.x;
-    gyroY = gyro_event.gyro.y;
-    gyroZ = gyro_event.gyro.z;
+    gyroReadings.x = gyro_event.gyro.x;
+    gyroReadings.y = gyro_event.gyro.y;
+    gyroReadings.z = gyro_event.gyro.z;
   }
 
   // Verify if orientation can be calculated
@@ -131,15 +158,27 @@ void loop() {
 
     // Calculate orientation
     if (dof.fusionGetOrientation(&accel_event, &mag_event, &orientation)) {
-      roll = orientation.roll();
-      pitch = orientation.pitch();
-      heading = orientation.heading();
+      oriReadings.oriRoll = orientation.roll;
+      oriReadings.oriPitch = orientation.pitch;
+      oriReadings.oriHeading = orientation.heading;
     }
   }
 
   // Print collected data to file
   logfile = SD.open(filename, FILE_WRITE);
-  logfile.println(F(timeStamp,temp,pressure,accelX,accelY,magX,magY,magZ,gyroX,gyroY,gyroZ,pitch,roll,heading))
+  
+  float* dataItem[15] = {&timeStamp, &bmpReadings.temp, &bmpReadings.pressure, &accelReadings.x, &accelReadings.y, &accelReadings.z, &magReadings.x, &magReadings.y, 
+    &magReadings.z, &gyroReadings.x, &gyroReadings.y, &gyroReadings.z, &oriReadings.oriRoll, &oriReadings.oriPitch, &oriReadings.oriHeading};
+
+  for (int i = 0; i < NUM_DATA; i++) {
+    logfile.print(*dataItem[i]);
+    logfile.print(",");
+  }
+  
+  logfile.println("");
+
+
+  
   logfile.close(); // Save data
 
   // Delay 0.1 secs
