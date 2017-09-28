@@ -1,10 +1,10 @@
 % Filename: postPrcoessing.m
-% Original author: Victoria Pickett
+% Original author: Victoria Skeggs
 % File Creation date: 23 September 2017
 
 % Description: This script will process the sensor data received from 
 % Team Rocket's P-Sat.
-% Contributors: Victoria Pickett, Louis Habberfield-Short
+% Contributors: Victoria Skeggs, Louis Habberfield-Short
 % Last updated: 29 September 2017
 
 clc; clear; close all;
