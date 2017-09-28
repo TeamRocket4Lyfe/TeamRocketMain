@@ -8,7 +8,7 @@ function [] = MakeAndSavePlot( x, xLabel, y, yLabel, graphTitle, filename )
 %           filename: String ending in .png
 % Output:   NONE. Note that the plot is shown and saved as a png file in
 %           the current working directory.
-% Author:   Victoria Pickett
+% Author:   Victoria Skeggs
 % Date:     24 September 2017
 
 % Assert that filename ends in .png
