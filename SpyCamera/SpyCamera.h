@@ -4,8 +4,8 @@ Created by Louis Habberfield-Short, Spetember 9, 2017.
 Released into the public domain.
 */
 
-#ifndef spyCamera_h
-#define spyCamera_h
+#ifndef SpyCamera_h
+#define SpyCamera_h
 
 #include "Arduino.h"
 
@@ -15,7 +15,7 @@ public:
 	SpyCamera(int pin);
 	void takePicture();
 	void toggleVideo();
-	void recordVideo(int duration);
+	void takeVideo(int duration);
 private:
 	int _pin;
 };
