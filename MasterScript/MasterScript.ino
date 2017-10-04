@@ -2,6 +2,7 @@
 #include <SPI.h>
 #include <SD.h>
 #include <Wire.h>
+#include <WiFi101.h>
 
 // Sensor libraries
 #include <Adafruit_GPS.h>
@@ -16,7 +17,7 @@
 
 // Define constants
 #define cardSelect 10
-#define NUM_DATA 17
+#define NUM_DATA 19
 
 // Set the pins used
 #define GPSSerial Serial1
@@ -26,6 +27,7 @@
 #define BMP_CS 10
 
 // Assign a unique ID to the sensors
+
 Adafruit_GPS GPS(&GPSSerial);
 Adafruit_9DOF dof = Adafruit_9DOF();
 Adafruit_LSM303_Accel_Unified accel = Adafruit_LSM303_Accel_Unified(30301);
@@ -33,9 +35,11 @@ Adafruit_LSM303_Mag_Unified mag = Adafruit_LSM303_Mag_Unified(30302);
 Adafruit_L3GD20_Unified gyro = Adafruit_L3GD20_Unified(20);
 Adafruit_BMP280 bmp;
 
+// Create camera object on pin 10 (move to 9?)
+SpyCamera camera(10); 
+
 File logfile;
 char filename[15];
-uint32_t timer = millis();
 float timeStamp = millis();
 
 // Initialise sensor working variables
@@ -48,6 +52,8 @@ bool SDWorking;
 struct gps_s {
   float gpsLat;
   float gpsLong;
+  float gpsAlt;
+  float gpsVel;
 } gpsReadings;
 
 struct accel_s {
@@ -78,6 +84,13 @@ struct bmp_s {
   float temp;
   float pressure;
 } bmpReadings;
+
+// Iniialise mission events
+bool deployed = false;
+bool altOne = false;
+bool altTwo = false;
+bool altThree = false;
+bool landed = false;
 
 void setup() {
 
@@ -116,7 +129,8 @@ void setup() {
 
   // Create headings in data file
   logfile.print("TimeStamp(ms),Temperature(*C),Pressure(Pa),AccelX(m/s^2),AccelY(m/s^2),");
-  logfile.println("AccelZ(m/s^2),MagX(uT),MagY(uT),MagZ(uT),GyroX(rad/s),GyroY(rad/s),GyroZ(rad/s),OriPitch,OriRoll,OriHeading,Latitude,Longitude"); 
+  logfile.print("AccelZ(m/s^2),MagX(uT),MagY(uT),MagZ(uT),GyroX(rad/s),GyroY(rad/s),GyroZ(rad/s),OriPitch,OriRoll,OriHeading,");
+  logfile.println("Latitude,Longitude,Altitude,Velocity"); 
 
   // Close data file
   logfile.close();
@@ -135,13 +149,14 @@ void loop() {
   }
 
   // Perform read/write once every second
-  if (millis() - timer > 1000) {
-    timer = millis(); // reset the timer
-    timeStamp = millis(); // Get a timestamp
+  if (millis() - timeStamp > 1000) {
+    timeStamp = millis(); // Set the timeStamp
     
     if (GPS.fix) {
         gpsReadings.gpsLat = GPS.latitude;
         gpsReadings.gpsLong = GPS.longitude;
+        gpsReadings.gpsAlt = GPS.altitude;
+        gpsReadings.gpsVel = GPS.speed;
       }
     
     // Take temperature and pressure readings if sensor is working
@@ -204,9 +219,9 @@ void loop() {
     // Print collected data to file
     logfile = SD.open(filename, FILE_WRITE);
     
-    float* dataItem[17] = {&timeStamp, &bmpReadings.temp, &bmpReadings.pressure, &accelReadings.x, &accelReadings.y, &accelReadings.z, 
+    float* dataItem[19] = {&timeStamp, &bmpReadings.temp, &bmpReadings.pressure, &accelReadings.x, &accelReadings.y, &accelReadings.z, 
     &magReadings.x, &magReadings.y, &magReadings.z, &gyroReadings.x, &gyroReadings.y, &gyroReadings.z, &oriReadings.oriRoll, 
-    &oriReadings.oriPitch, &oriReadings.oriHeading, &gpsReadings.gpsLat, &gpsReadings.gpsLong};
+    &oriReadings.oriPitch, &oriReadings.oriHeading, &gpsReadings.gpsLat, &gpsReadings.gpsLong, &gpsReadings.gpsAlt, &gpsReadings.gpsVel};
     
     for (int i = 0; i < NUM_DATA; i++) {
       logfile.print(*dataItem[i], 4); // Print values to 4 dp
@@ -216,5 +231,35 @@ void loop() {
     logfile.println("");
     
     logfile.close(); // Save data
+  }
+
+  // Check mission events
+
+  if (!deployed // && deployment condition) {
+    deployed = true;
+    // Ready to start transmission
+  }
+  
+  if (deployed && !altOne // && altOne reached) {
+    // Triggered from barometer data, take two pictures
+    altOne = true;
+    camera.takePicture(); camera.takePicture();
+  }
+
+  if (deployed && !altTwo // && altTwo reached) {
+    // Triggered from GPS data, take two pictures
+    altTwo = true;
+    camera.takePicture(); camera.takePicture();
+  }
+
+  if (deployed && !altThree // && altThree reached) {
+    altThree = true;
+    // Start video landing
+    camera.toggleVideo();
+  }
+
+   if (deployed && !landed // && landed reached) {
+    landed = true;
+    camera.toggleVideo();
   }
 }
