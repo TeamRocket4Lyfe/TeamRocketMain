@@ -38,8 +38,17 @@ Adafruit_BMP280 bmp;
 // Create camera object on pin 10 (move to 9?)
 SpyCamera camera(10); 
 
+// Prepare SD card file
 File logfile;
 char filename[15];
+
+// Prepare WiFi webserver. IP address will be 192.168.1.1
+char ssid[] = "wifi101-network"; // created AP name
+WiFiServer server(80);
+int status = WL_IDLE_STATUS;
+char callback[23] = "arduinoWiFiComCallback"; // Callback for JSONP transmisison
+
+// Start timer
 float timeStamp = millis();
 
 // Initialise sensor working variables
@@ -86,7 +95,7 @@ struct bmp_s {
 } bmpReadings;
 
 // Iniialise mission events
-bool deployed = false;
+bool deployed = true; // true for testing of transmission
 bool altOne = false;
 bool altTwo = false;
 bool altThree = false;
@@ -109,6 +118,20 @@ void setup() {
   magWorking = mag.begin();
   bmpWorking = bmp.begin();
   SDWorking = SD.begin(cardSelect);
+
+  // Set up WiFi 
+  WiFi.setPins(8,7,4,2); //Configure pins
+  if (WiFi.status() == WL_NO_SHIELD) {
+    // don't continue
+    while (true);
+  }  
+  status = WiFi.beginAP(ssid); // Create open network
+  if (status != WL_AP_LISTENING) {
+    // don't continue
+    while (true);
+  }  
+  delay(10000); // wait 10 seconds for connection (reduce?)
+  server.begin(); // start the web server
 
   // Find unique name for data file
   strcpy(filename, "data00.csv");
@@ -153,8 +176,8 @@ void loop() {
     timeStamp = millis(); // Set the timeStamp
     
     if (GPS.fix) {
-        gpsReadings.gpsLat = GPS.latitude;
-        gpsReadings.gpsLong = GPS.longitude;
+        gpsReadings.gpsLat = GPS.latitudeDegrees;
+        gpsReadings.gpsLong = GPS.longitudeDegrees;
         gpsReadings.gpsAlt = GPS.altitude;
         gpsReadings.gpsVel = GPS.speed;
       }
@@ -231,35 +254,86 @@ void loop() {
     logfile.println("");
     
     logfile.close(); // Save data
+
+    if (deployed) {
+      WiFiClient client = server.available();   // listen for incoming clients
+
+      if (client) {                             // if you get a client,
+        String currentLine = "";                // make a String to hold incoming data from the client
+        while (client.connected()) {            // loop while the client's connected
+          if (client.available()) {             // if there's bytes to read from the client,
+            char c = client.read();             // read a byte, then
+            if (c == '\n') {                    // if the byte is a newline character
+    
+              // if the current line is blank, you got two newline characters in a row.
+              // that's the end of the client HTTP request, so send a response:
+              if (currentLine.length() == 0) {
+                // HTTP headers always start with a response code (e.g. HTTP/1.1 200 OK)
+                // and a content-type so the client knows what's coming, then a blank line:
+                client.println("HTTP/1.1 200 OK");
+                client.println("Content-type:application/json");
+                client.println();
+    
+                // the content of the HTTP response follows the header:
+                client.print(callback);
+                client.print("('{");
+                for (int i = 0; i < NUM_DATA; i++) {
+                  client.print("\"A");
+                  client.print(i);
+                  client.print("\": ");
+                  client.print(*dataItem[i], 4); // Print values to 4 dp
+                  if (i != (NUM_DATA -1)) client.print(",");                  
+                }
+                
+                // The HTTP response ends with another blank line:
+                client.println("}')");
+                // break out of the while loop:
+                break;
+              }
+              else {      // if you got a newline, then clear currentLine:
+                currentLine = "";
+              }
+            }
+            else if (c != '\r') {    // if you got anything else but a carriage return character,
+              currentLine += c;      // add it to the end of the currentLine
+            }
+          }
+        }
+    
+        delay(1);
+        // close the connection:
+        client.stop();
+      }
+    }
   }
 
-  // Check mission events
-
-  if (!deployed // && deployment condition) {
-    deployed = true;
-    // Ready to start transmission
-  }
-  
-  if (deployed && !altOne // && altOne reached) {
+//  // Check mission events
+//
+//  if (!deployed // && deployment condition) {
+//    deployed = true;
+//    // Ready to start transmission
+//  }
+//  
+  if (deployed && !altOne /* && altOne reached */) {
     // Triggered from barometer data, take two pictures
     altOne = true;
     camera.takePicture(); camera.takePicture();
   }
-
-  if (deployed && !altTwo // && altTwo reached) {
-    // Triggered from GPS data, take two pictures
-    altTwo = true;
-    camera.takePicture(); camera.takePicture();
-  }
-
-  if (deployed && !altThree // && altThree reached) {
-    altThree = true;
-    // Start video landing
-    camera.toggleVideo();
-  }
-
-   if (deployed && !landed // && landed reached) {
-    landed = true;
-    camera.toggleVideo();
-  }
+//
+//  if (deployed && !altTwo // && altTwo reached) {
+//    // Triggered from GPS data, take two pictures
+//    altTwo = true;
+//    camera.takePicture(); camera.takePicture();
+//  }
+//
+//  if (deployed && !altThree // && altThree reached) {
+//    altThree = true;
+//    // Start video landing
+//    camera.toggleVideo();
+//  }
+//
+//   if (deployed && !landed // && landed reached) {
+//    landed = true;
+//    camera.toggleVideo();
+//  }
 }
