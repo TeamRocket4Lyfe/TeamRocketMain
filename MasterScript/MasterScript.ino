@@ -18,25 +18,27 @@
 // Define constants
 #define cardSelect 10
 #define NUM_DATA 19
+#define GPSSerial Serial1
+#define GPS_BEGIN 9600
 
 // Set the pins used
-#define GPSSerial Serial1
 #define BMP_SCK 13
 #define BMP_MISO 12
 #define BMP_MOSI 11 
 #define BMP_CS 10
+#define WIFI_PIN_1 8
+#define WIFI_PIN_2 7
+#define WIFI_PIN_3 4
+#define WIFI_PIN_4 2
 
 // Assign a unique ID to the sensors
-
 Adafruit_GPS GPS(&GPSSerial);
 Adafruit_9DOF dof = Adafruit_9DOF();
 Adafruit_LSM303_Accel_Unified accel = Adafruit_LSM303_Accel_Unified(30301);
 Adafruit_LSM303_Mag_Unified mag = Adafruit_LSM303_Mag_Unified(30302);
 Adafruit_L3GD20_Unified gyro = Adafruit_L3GD20_Unified(20);
 Adafruit_BMP280 bmp;
-
-// Create camera object on pin 10 (move to 9?)
-SpyCamera camera(10); 
+SpyCamera camera(cardSelect); 
 
 // Prepare SD card file
 File logfile;
@@ -51,13 +53,22 @@ char callback[23] = "arduinoWiFiComCallback"; // Callback for JSONP transmisison
 // Start timer
 float timeStamp = millis();
 
-// Initialise sensor working variables
-bool accelWorking;
-bool gyroWorking;
-bool magWorking;
-bool bmpWorking;
-bool SDWorking;
+// Assume each component is working
+bool accelWorking = true;
+bool gyroWorking = true;
+bool magWorking = true;
+bool bmpWorking = true;
+bool SDWorking = true;
+bool wiFiWorking = true;
 
+// Initialise mission events
+bool deployed = true; // true for testing of transmission
+bool altOne = false;
+bool altTwo = false;
+bool altThree = false;
+bool landed = false;
+
+// Create sensor structures
 struct gps_s {
   float gpsLat;
   float gpsLong;
@@ -94,46 +105,69 @@ struct bmp_s {
   float pressure;
 } bmpReadings;
 
-// Iniialise mission events
-bool deployed = true; // true for testing of transmission
-bool altOne = false;
-bool altTwo = false;
-bool altThree = false;
-bool landed = false;
-
 void setup() {
 
-  // Initialise GPS
-  GPS.begin(9600);
+  checkComponentsWorking();
+  
+  initialiseGPS();
+  initialiseWiFi();
+
+  getDataFileName();
+  
+  if (SDWorking) {
+    printDataHeadingsInLogfile();
+  }  
+}
+
+/*
+ * Sets up the GPS to take latitudinal and longitudinal data
+ */
+void initialiseGPS() {
+  GPS.begin(GPS_BEGIN);
   GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA); // Recommended settings
   GPS.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ); // 1 Hz update rate
   GPS.sendCommand(PGCMD_ANTENNA); // Request updates on antennae status
   GPSSerial.println(PMTK_Q_RELEASE); // Ask for firmware version
   gpsReadings.gpsLat = 0; // Initialise data
   gpsReadings.gpsLong = 0;
-  
-  // Check sensors and SD card are functional
+}
+
+/**
+ *  Sets up the WiFi from the Arduino
+ */
+ void initialiseWiFi() {
+  // Set up WiFi 
+  WiFi.setPins(WIFI_PIN_1,WIFI_PIN_2,WIFI_PIN_3,WIFI_PIN_4); // Configure pins
+  if (WiFi.status() == WL_NO_SHIELD) {
+    wiFiWorking = false;
+    return;
+  }  
+  status = WiFi.beginAP(ssid); // Create open network
+  if (status != WL_AP_LISTENING) {
+    wiFiWorking = false;
+    return;
+  }  
+  delay(10000); // wait 10 seconds for connection (reduce?)
+  server.begin(); // start the web server
+ }
+
+/**
+ * Checks whether each sensor, the SD card, the WiFi and the GPS are functional
+ */
+void checkComponentsWorking() {
   accelWorking = accel.begin();
   gyroWorking = gyro.begin();
   magWorking = mag.begin();
   bmpWorking = bmp.begin();
+  
   SDWorking = SD.begin(cardSelect);
+}
 
-  // Set up WiFi 
-  WiFi.setPins(8,7,4,2); //Configure pins
-  if (WiFi.status() == WL_NO_SHIELD) {
-    // don't continue
-    while (true);
-  }  
-  status = WiFi.beginAP(ssid); // Create open network
-  if (status != WL_AP_LISTENING) {
-    // don't continue
-    while (true);
-  }  
-  delay(10000); // wait 10 seconds for connection (reduce?)
-  server.begin(); // start the web server
-
-  // Find unique name for data file
+/**
+ * Finds a unique filename to store the sensor data in and stores this name in the 
+ * filename variable
+ */
+ void getDataFileName() {
   strcpy(filename, "data00.csv");
   for (uint8_t i = 0; i < 100; i++) {
     filename[4] = '0' + i/10;
@@ -143,11 +177,18 @@ void setup() {
       break;
     }
   }
+ }
 
+ /**
+  * Prints a heading into the logfile to indicate which column corresponds to which sensor reading
+  */
+void printDataHeadingsInLogfile() {
+  
   // Create and open data file for writing
   logfile = SD.open(filename, FILE_WRITE);
-  if( ! logfile ) {
-    // do something
+  if (!logfile) {
+    SDWorking = false;
+    return;
   }
 
   // Create headings in data file
@@ -157,7 +198,6 @@ void setup() {
 
   // Close data file
   logfile.close();
-  
 }
 
 void loop() {
@@ -165,7 +205,6 @@ void loop() {
   // Check for new GPS sentence
   GPS.read();
   if (GPS.newNMEAreceived()) {
-    // Serial.println("New NMEA received");
     GPS.parse(GPS.lastNMEA());
     if (!GPS.parse(GPS.lastNMEA())) 
       return; // we can fail to parse a sentence in which case we should just wait for another     
