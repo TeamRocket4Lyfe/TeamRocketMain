@@ -44,14 +44,6 @@ char filename[15];
 // Start timer
 float timeStamp = millis();
 
-// Assume each component is working
-bool accelWorking = true;
-bool gyroWorking = true;
-bool magWorking = true;
-bool bmpWorking = true;
-bool SDWorking = true;
-bool wiFiWorking = true;
-
 // Initialise mission events
 bool gpsAltInitialised = false;
 bool deployed = false; // make true for testing purposes
@@ -103,18 +95,16 @@ struct bmp_s {
 float batteryVoltage;
 
 void setup() {
-
-  checkComponentsWorking();
   
   initialiseGPS();
 
   getDataFileName();
   
-  if (SDWorking) {
+  if (SD.begin(cardSelect)) {
     printDataHeadingsInLogfile();
   }
 
-  if (bmpWorking) {
+  if (bmp.begin()) {
     recordGroundPressure();
   }
 }
@@ -130,18 +120,6 @@ void initialiseGPS() {
   GPSSerial.println(PMTK_Q_RELEASE); // Ask for firmware version
   gpsReadings.gpsLat = 0; // Initialise data
   gpsReadings.gpsLong = 0;
-}
-
-/**
- * Checks whether each sensor, the SD card, the WiFi and the GPS are functional
- */
-void checkComponentsWorking() {
-  accelWorking = accel.begin();
-  gyroWorking = gyro.begin();
-  magWorking = mag.begin();
-  bmpWorking = bmp.begin();
-  
-  SDWorking = SD.begin(cardSelect);
 }
 
 /**
@@ -167,10 +145,6 @@ void printDataHeadingsInLogfile() {
   
   // Create and open data file for writing
   logfile = SD.open(filename, FILE_WRITE);
-  if (!logfile) {
-    SDWorking = false;
-    return;
-  }
 
   // Create headings in data file
   logfile.print("TimeStamp(ms),Temperature(*C),Pressure(Pa),Altitude(m),AccelX(m/s^2),AccelY(m/s^2),");
@@ -207,7 +181,7 @@ void loop() {
       }
     
     // Take temperature and pressure readings if sensor is working
-    if (bmpWorking) {
+    if (bmp.begin()) {
       bmpReadings.temp = bmp.readTemperature();
       bmpReadings.pressure = (float) bmp.readPressure();
       bmpReadings.altitude = bmp.readAltitude(bmpReadings.groundPressure);
@@ -217,7 +191,7 @@ void loop() {
     sensors_event_t accel_event;
     
     // Take acceleration readings if sensor is working
-    if (accelWorking) {
+    if (accel.begin()) {
       // Create acceleration event
       accel.getEvent(&accel_event);
   
@@ -231,7 +205,7 @@ void loop() {
     sensors_event_t mag_event;
   
     // Take magnetic field strength readings if sensor is working
-    if (magWorking) {
+    if (mag.begin()) {
       // Create event
       mag.getEvent(&mag_event);
   
@@ -242,7 +216,7 @@ void loop() {
     }
   
     // Take gyroscopic readings if sensor is working
-    if (gyroWorking) {
+    if (gyro.begin()) {
       // Create event
       sensors_event_t gyro_event;
       gyro.getEvent(&gyro_event);
@@ -254,7 +228,7 @@ void loop() {
     }
 
     // Verify if orientation can be calculated
-    if (accelWorking && magWorking) {
+    if (accel.begin() && mag.begin()) {
       sensors_vec_t orientation;
   
       // Calculate orientation
@@ -271,20 +245,22 @@ void loop() {
 
     // Print collected data to file
     logfile = SD.open(filename, FILE_WRITE);
+
+    if (logfile) {
+        float* dataItem[21] = {&timeStamp, &bmpReadings.temp, &bmpReadings.pressure, &bmpReadings.altitude, &accelReadings.x, &accelReadings.y, &accelReadings.z, 
+      &magReadings.x, &magReadings.y, &magReadings.z, &gyroReadings.x, &gyroReadings.y, &gyroReadings.z, &oriReadings.oriRoll,  &oriReadings.oriPitch, &oriReadings.oriHeading,
+      &gpsReadings.gpsLat, &gpsReadings.gpsLong, &gpsReadings.gpsAlt, &gpsReadings.gpsVel, &batteryVoltage};
     
-    float* dataItem[21] = {&timeStamp, &bmpReadings.temp, &bmpReadings.pressure, &bmpReadings.altitude, &accelReadings.x, &accelReadings.y, &accelReadings.z, 
-    &magReadings.x, &magReadings.y, &magReadings.z, &gyroReadings.x, &gyroReadings.y, &gyroReadings.z, &oriReadings.oriRoll,  &oriReadings.oriPitch, &oriReadings.oriHeading,
-    &gpsReadings.gpsLat, &gpsReadings.gpsLong, &gpsReadings.gpsAlt, &gpsReadings.gpsVel, &batteryVoltage};
+      for (int i = 0; i < NUM_DATA; i++) {
+        logfile.print(*dataItem[i], 4); // Print values to 4 dp
+        logfile.print(",");
+      }
     
-    for (int i = 0; i < NUM_DATA; i++) {
-      logfile.print(*dataItem[i], 4); // Print values to 4 dp
-      logfile.print(",");
+      logfile.println("");
+    
+      logfile.close(); // Save data
     }
     
-    logfile.println("");
-    
-    logfile.close(); // Save data
-
     // Check mission events
 
     if (!deployed && (bmpReadings.altitude > 600)) {
