@@ -156,7 +156,9 @@ void printDataHeadingsInLogfile() {
 }
 
 void recordGroundPressure() {
+  
   bmpReadings.groundPressure = bmp.readPressure()/100; // Convert to hectopascals/millibars
+  bmpReadings.groundPressure = bmp.readPressure()/100;
 }
 
 void loop() {
@@ -183,7 +185,7 @@ void loop() {
     // Take temperature and pressure readings if sensor is working
     if (bmp.begin()) {
       bmpReadings.temp = bmp.readTemperature();
-      bmpReadings.pressure = (float) bmp.readPressure();
+      bmpReadings.pressure = (float) bmp.readPressure();  
       bmpReadings.altitude = bmp.readAltitude(bmpReadings.groundPressure);
     }
   
@@ -246,6 +248,8 @@ void loop() {
     // Print collected data to file
     logfile = SD.open(filename, FILE_WRITE);
 
+    Serial.println(bmpReadings.altitude);
+
     if (logfile) {
         float* dataItem[21] = {&timeStamp, &bmpReadings.temp, &bmpReadings.pressure, &bmpReadings.altitude, &accelReadings.x, &accelReadings.y, &accelReadings.z, 
       &magReadings.x, &magReadings.y, &magReadings.z, &gyroReadings.x, &gyroReadings.y, &gyroReadings.z, &oriReadings.oriRoll,  &oriReadings.oriPitch, &oriReadings.oriHeading,
@@ -262,7 +266,6 @@ void loop() {
     }
     
     // Check mission events
-
     if (!deployed && (bmpReadings.altitude > 600)) {
       // Note - this script version does not transmit so determining exact deployment time is unnecesasary
       deployed = true;
