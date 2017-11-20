@@ -33,6 +33,7 @@
 #define GPSSerial Serial1
 #define GPS_BEGIN 9600
 
+
 // Create sensor structures
 struct gps_s {
   float gpsLat;
