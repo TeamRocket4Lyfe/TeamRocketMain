@@ -11,6 +11,7 @@ SpyCamera::SpyCamera(int pin)
 {
 	pinMode(pin, OUTPUT);
 	_pin = pin;
+	digitalWrite(_pin, HIGH);
 }
 
 void SpyCamera::takePicture()
@@ -18,6 +19,7 @@ void SpyCamera::takePicture()
 	digitalWrite(_pin, LOW);
 	delay(100);
 	digitalWrite(_pin, HIGH);
+	delay(1000);
 }
 
 void SpyCamera::toggleVideo()

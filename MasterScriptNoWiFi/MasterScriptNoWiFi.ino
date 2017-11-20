@@ -23,16 +23,11 @@
 #define VBATPIN A7
 #define CAMERA_SELECT 6
 #define CARD_SELECT 10
-#define WIFI_PIN_1 8
-#define WIFI_PIN_2 7
-#define WIFI_PIN_3 4
-#define WIFI_PIN_4 2
 
 // Define constants
 #define NUM_DATA 21
 #define GPSSerial Serial1
 #define GPS_BEGIN 9600
-
 
 // Create sensor structures
 struct gps_s {
@@ -89,14 +84,7 @@ char filename[15];
 float batteryVoltage;
 float timeStamp = millis(); // Start timer
 
-// Prepare WiFi webserver. IP address will be 192.168.1.1
-char ssid[] = "wifi101-network"; // created AP name
-WiFiServer server(80);
-int status = WL_IDLE_STATUS;
-char callback[23] = "arduinoWiFiComCallback"; // Callback for JSONP transmisison
-
 // Initialise mission events
-bool wiFiWorking = true;
 bool gpsAltInitialised = false;
 bool deployed = false; // make true for testing purposes
 bool altOne = false;
@@ -107,7 +95,6 @@ bool landed = false;
 void setup() {
   
   initialiseGPS();
-  initialiseWiFi();
 
   getDataFileName();
   
@@ -134,18 +121,8 @@ void loop() {
       getIMUData();
       getBatteryVoltage();
 
-      // Format sensor data
-      float* dataItem[21] = {&timeStamp, &bmpReadings.temp, &bmpReadings.pressure, &bmpReadings.altitude, &accelReadings.x, &accelReadings.y, &accelReadings.z, 
-      &magReadings.x, &magReadings.y, &magReadings.z, &gyroReadings.x, &gyroReadings.y, &gyroReadings.z, &oriReadings.oriRoll,  &oriReadings.oriPitch, &oriReadings.oriHeading,
-      &gpsReadings.gpsLat, &gpsReadings.gpsLong, &gpsReadings.gpsAlt, &gpsReadings.gpsVel, &batteryVoltage};
-
       // Print collected data to a logfile
-      printDataRowToLogfile(dataItem);
-
-      // Transmit data if PSat has been deployed
-      if (deployed) {
-        transmitData(dataItem);
-      }
+      printDataRowToLogfile();
     
       // Take pictures at mission events
       checkForParachuteDeployment();
@@ -168,25 +145,6 @@ void initialiseGPS() {
   GPSSerial.println(PMTK_Q_RELEASE); // Ask for firmware version
   gpsReadings.gpsLat = 0; // Initialise data
   gpsReadings.gpsLong = 0;
-}
-
-/**
- *  Sets up the WiFi from the Arduino
- */
- void initialiseWiFi() {
-  // Set up WiFi 
-  WiFi.setPins(WIFI_PIN_1,WIFI_PIN_2,WIFI_PIN_3,WIFI_PIN_4); // Configure pins
-  if (WiFi.status() == WL_NO_SHIELD) {
-    wiFiWorking = false;
-    return;
-  }  
-  status = WiFi.beginAP(ssid); // Create open network
-  if (status != WL_AP_LISTENING) {
-    wiFiWorking = false;
-    return;
-  }  
-  delay(10000); // Wait 10 seconds for connection
-  server.begin(); // Start the web server
 }
 
 /**
@@ -366,10 +324,13 @@ void getBatteryVoltage() {
 /**
  * Prints a row of sensor readings to a logfile in csv format.
  */
-void printDataRowToLogfile(float** dataItem) {
+void printDataRowToLogfile() {
   logfile = SD.open(filename, FILE_WRITE);
 
   if (logfile) {
+    float* dataItem[21] = {&timeStamp, &bmpReadings.temp, &bmpReadings.pressure, &bmpReadings.altitude, &accelReadings.x, &accelReadings.y, &accelReadings.z, 
+      &magReadings.x, &magReadings.y, &magReadings.z, &gyroReadings.x, &gyroReadings.y, &gyroReadings.z, &oriReadings.oriRoll,  &oriReadings.oriPitch, &oriReadings.oriHeading,
+      &gpsReadings.gpsLat, &gpsReadings.gpsLong, &gpsReadings.gpsAlt, &gpsReadings.gpsVel, &batteryVoltage};
     
     for (int i = 0; i < NUM_DATA; i++) {
       logfile.print(*dataItem[i], 4); // Print values to 4 dp
@@ -378,55 +339,6 @@ void printDataRowToLogfile(float** dataItem) {
 
     logfile.println("");
     logfile.close(); // Save data
-  }
-}
-
-/**
- * Transmits a row of sensor data to a WiFi client in csv format
- */
-void transmitData(float** dataItem) {
-  WiFiClient client = server.available();   // Listen for incoming clients
-
-  if (client) {                            
-    String currentLine = "";                // Hold incoming data from the client
-    while (client.connected()) {            
-      if (client.available()) {            
-        char c = client.read();             // Read incoming bytes
-        if (c == '\n') {                    // Check if the end of the client HTTP request has been reached
-          
-          if (currentLine.length() == 0) {
-
-            // Send a response to the client
-            client.println("HTTP/1.1 200 OK"); // HTTP header
-            client.println("Content-type:application/json"); // Tell client that a JSON submission is coming
-            client.println();
-    
-            // Send the sensor data
-            client.print(callback);
-            client.print("('{");
-            for (int i = 0; i < NUM_DATA; i++) {
-              client.print("\"A");
-              client.print(i);
-              client.print("\": ");
-              client.print(*dataItem[i], 4); // Print values to 4 dp
-              if (i != (NUM_DATA -1)) client.print(",");                  
-            }
-                
-            // End the HTTP response
-            client.println("}')");
-            break;
-          } else {      
-            currentLine = ""; // Clear data from the client
-          }
-        } else if (c != '\r') {
-          currentLine += c; // Append data from the client
-        }
-      }
-    }
-    delay(1);
-    
-    // Close the connection
-    client.stop();
   }
 }
 
