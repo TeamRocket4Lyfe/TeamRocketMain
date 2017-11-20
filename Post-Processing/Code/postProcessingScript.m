@@ -1,3 +1,4 @@
+
 % Filename: postPrcoessing.m
 % File Creation date: 23 September 2017
 
@@ -14,9 +15,10 @@ filepath = 'DATA00.CSV';
 % Read data from csv file, ignoring headers
 data = csvread(filepath,1,0);
 
-% Allocate measurement data
+% Calculate altitude offset from BMP
 altitudeOffset = 4375;
 
+% Read in measurement data
 time = data(:, 1)/1000; % convert time to milliseconds
 temp = data(:, 2);
 pressure = data(:, 3);
@@ -60,10 +62,10 @@ filenames = {'TempvsTime.png', 'PressvsTime.png', 'BMPAltitude.png', 'AccelXvsTi
     'GyroYvsTime.png','GyroZvsTime.png', 'PitchvsTime.png', ...
     'RollvsTime.png', 'HeadingvsTime.png', 'GPSAltitude.png', 'Speed.png', 'Voltage.png'};
 
-% Create and save plot of each raw measurement against time
+% Create and save plot of each raw measurement
 for i = 1:length(measurements)
     figure(i);
-%    MakeAndSavePlot(time, 'time (s)', measurements{i}, yLabels{i}, titles{i}, filenames{i});
+    MakeAndSavePlot(time, 'time (s)', measurements{i}, yLabels{i}, titles{i}, filenames{i});
 end
 
 % Smooth datasets
