@@ -42,6 +42,7 @@ voltage = data(:, 21);
 % Plot each set of measurements against time
 measurements = {temp, pressure, altitudeBMP, accelX, accelY, accelZ, magX, magY, ...
     magZ, gyroX, gyroY, gyroZ, pitch, roll, heading, altitudeGPS, speed, voltage};
+
 yLabels = {'temperature (*C)', 'pressure (Pa)', 'altitude from BMP (m)', 'accelX (m/s^2)', ...
     'accelY(m/s^2)', 'accelZ (m/s^2)', 'magX (uT)', 'magY (uT)', ...
     'magZ (uT)', 'gyroX (rad/s)', 'gyroY (rad/s)', 'gyroZ (rad/s)', ...
@@ -59,7 +60,21 @@ filenames = {'TempvsTime.png', 'PressvsTime.png', 'BMPAltitude.png', 'AccelXvsTi
     'GyroYvsTime.png','GyroZvsTime.png', 'PitchvsTime.png', ...
     'RollvsTime.png', 'HeadingvsTime.png', 'GPSAltitude.png', 'Speed.png', 'Voltage.png'};
 
+% Create and save plot of each raw measurement against time
 for i = 1:length(measurements)
     figure(i);
-    MakeAndSavePlot(time, 'time (s)', measurements{i}, yLabels{i}, titles{i}, filenames{i});
+%    MakeAndSavePlot(time, 'time (s)', measurements{i}, yLabels{i}, titles{i}, filenames{i});
+end
+
+% Smooth datasets
+for i = 1:length(measurements)
+    current = cell2mat(measurements(i));
+    figure(length(measurements) + i);
+    
+    for j = 1:100
+        current = VectorSmooth(current);
+    end
+    
+    % Plot smoothed data
+    plot(time, current);
 end

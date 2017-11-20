@@ -15,42 +15,19 @@
 // Custom libraries
 #include <SpyCamera.h>
 
-// Define constants
-#define cardSelect 10
-#define NUM_DATA 21
-#define GPSSerial Serial1
-#define GPS_BEGIN 9600
-
 // Set the pins used
 #define BMP_SCK 13
 #define BMP_MISO 12
 #define BMP_MOSI 11 
 #define BMP_CS 10
 #define VBATPIN A7
+#define CAMERA_SELECT 6
+#define CARD_SELECT 10
 
-// Assign a unique ID to the sensors
-Adafruit_GPS GPS(&GPSSerial);
-Adafruit_9DOF dof = Adafruit_9DOF();
-Adafruit_LSM303_Accel_Unified accel = Adafruit_LSM303_Accel_Unified(30301);
-Adafruit_LSM303_Mag_Unified mag = Adafruit_LSM303_Mag_Unified(30302);
-Adafruit_L3GD20_Unified gyro = Adafruit_L3GD20_Unified(20);
-Adafruit_BMP280 bmp;
-SpyCamera camera(6); // On pin 6
-
-// Prepare SD card file
-File logfile;
-char filename[15];
-
-// Start timer
-float timeStamp = millis();
-
-// Initialise mission events
-bool gpsAltInitialised = false;
-bool deployed = false; // make true for testing purposes
-bool altOne = false;
-bool altTwo = false;
-bool altThree = false;
-bool landed = false;
+// Define constants
+#define NUM_DATA 21
+#define GPSSerial Serial1
+#define GPS_BEGIN 9600
 
 // Create sensor structures
 struct gps_s {
@@ -92,7 +69,28 @@ struct bmp_s {
   float altitude;
 } bmpReadings;
 
+// Assign a unique ID to the sensors
+Adafruit_GPS GPS(&GPSSerial);
+Adafruit_9DOF dof = Adafruit_9DOF();
+Adafruit_LSM303_Accel_Unified accel = Adafruit_LSM303_Accel_Unified(30301);
+Adafruit_LSM303_Mag_Unified mag = Adafruit_LSM303_Mag_Unified(30302);
+Adafruit_L3GD20_Unified gyro = Adafruit_L3GD20_Unified(20);
+Adafruit_BMP280 bmp;
+SpyCamera camera(CAMERA_SELECT);
+
+// Initialise global variables
+File logfile; // Prepare SD card file
+char filename[15];
 float batteryVoltage;
+float timeStamp = millis(); // Start timer
+
+// Initialise mission events
+bool gpsAltInitialised = false;
+bool deployed = false; // make true for testing purposes
+bool altOne = false;
+bool altTwo = false;
+bool altThree = false;
+bool landed = false;
 
 void setup() {
   
@@ -100,12 +98,39 @@ void setup() {
 
   getDataFileName();
   
-  if (SD.begin(cardSelect)) {
+  if (SD.begin(CARD_SELECT)) {
     printDataHeadingsInLogfile();
   }
 
   if (bmp.begin()) {
     recordGroundPressure();
+  }
+}
+
+void loop() {
+
+  if (checkForGPSSentence()) {
+    if (readyToSample()) {
+
+      // Set the time stamp
+      timeStamp = millis(); 
+
+      // Take sensor readings
+      getGPSData();
+      getBMPData();
+      getIMUData();
+      getBatteryVoltage();
+
+      // Print collected data to a logfile
+      printDataRowToLogfile();
+    
+      // Take pictures at mission events
+      checkForParachuteDeployment();
+      checkFor500mDescending();
+      checkFor300mDescending();
+      checkFor30mDescending();
+      checkForLanding();
+    }
   }
 }
 
@@ -155,147 +180,226 @@ void printDataHeadingsInLogfile() {
   logfile.close();
 }
 
+/**
+ * Records the ground pressure to use as a reference
+ */
 void recordGroundPressure() {
-  
   bmpReadings.groundPressure = bmp.readPressure()/100; // Convert to hectopascals/millibars
   bmpReadings.groundPressure = bmp.readPressure()/100;
 }
 
-void loop() {
-
-  // Check for new GPS sentence
+/**
+ * Checks for a new GPS sentece. Returns true if a sentence could be parsed and false otherwise.
+ */
+bool checkForGPSSentence() {
   GPS.read();
   if (GPS.newNMEAreceived()) {
     GPS.parse(GPS.lastNMEA());
     if (!GPS.parse(GPS.lastNMEA())) 
-      return; // we can fail to parse a sentence in which case we should just wait for another     
+      return false;     
   }
+  return true;
+}
 
-  // Perform read/write once every second
+/**
+ * Checks that more than a second has passed since measurements were taken.
+ */
+bool readyToSample() {
   if (millis() - timeStamp > 1000) {
-    timeStamp = millis(); // Set the timeStamp
-    
-    if (GPS.fix) {
-        gpsReadings.gpsLat = GPS.latitudeDegrees;
-        gpsReadings.gpsLong = GPS.longitudeDegrees;
-        gpsReadings.gpsAlt = GPS.altitude;
-        gpsReadings.gpsVel = GPS.speed;
-      }
-    
-    // Take temperature and pressure readings if sensor is working
-    if (bmp.begin()) {
-      bmpReadings.temp = bmp.readTemperature();
-      bmpReadings.pressure = (float) bmp.readPressure();  
-      bmpReadings.altitude = bmp.readAltitude(bmpReadings.groundPressure);
-    }
-  
-    // Allow accel event to be accessed later in the script
-    sensors_event_t accel_event;
-    
-    // Take acceleration readings if sensor is working
-    if (accel.begin()) {
-      // Create acceleration event
-      accel.getEvent(&accel_event);
-  
-      // Take readings in 3 dimensions
-      accelReadings.x = accel_event.acceleration.x;
-      accelReadings.y = accel_event.acceleration.y;
-      accelReadings.z = accel_event.acceleration.z;
-    }
-  
-    // Allow magnetic event to be accessed later in the script
-    sensors_event_t mag_event;
-  
-    // Take magnetic field strength readings if sensor is working
-    if (mag.begin()) {
-      // Create event
-      mag.getEvent(&mag_event);
-  
-      // Take readings in 3 dimensions
-      magReadings.x = mag_event.magnetic.x;
-      magReadings.y = mag_event.magnetic.y;
-      magReadings.z = mag_event.magnetic.z;
-    }
-  
-    // Take gyroscopic readings if sensor is working
-    if (gyro.begin()) {
-      // Create event
-      sensors_event_t gyro_event;
-      gyro.getEvent(&gyro_event);
-  
-      // Take readings in 3 dimensions
-      gyroReadings.x = gyro_event.gyro.x;
-      gyroReadings.y = gyro_event.gyro.y;
-      gyroReadings.z = gyro_event.gyro.z;
-    }
+    return true;
+  } else {
+    return false;
+  }
+}
 
-    // Verify if orientation can be calculated
-    if (accel.begin() && mag.begin()) {
-      sensors_vec_t orientation;
+/**
+ * Takes readings from the GPS if a GPS fix can be obtained.
+ */
+void getGPSData () {
+  if (GPS.fix) {
+    gpsReadings.gpsLat = GPS.latitudeDegrees;
+    gpsReadings.gpsLong = GPS.longitudeDegrees;
+    gpsReadings.gpsAlt = GPS.altitude;
+    gpsReadings.gpsVel = GPS.speed;
+  }
+}
+
+/**
+ * Takes temperature and pressure readings from the BMP if the sensor is connected.
+ */
+void getBMPData() {
+  if (bmp.begin()) {
+    bmpReadings.temp = bmp.readTemperature();
+    bmpReadings.pressure = (float) bmp.readPressure();  
+    bmpReadings.altitude = bmp.readAltitude(bmpReadings.groundPressure);
+  }
+}
+
+/**
+ * Takes acceleration, magnetic field strength and rotational motion readings from the IMU.
+ */
+void getIMUData() {
   
-      // Calculate orientation
-      if (dof.fusionGetOrientation(&accel_event, &mag_event, &orientation)) {
-        oriReadings.oriRoll = orientation.roll;
-        oriReadings.oriPitch = orientation.pitch;
-        oriReadings.oriHeading = orientation.heading;
-      }
-    }
-
-    // Read battery voltage
-    batteryVoltage = analogRead(VBATPIN);
-    batteryVoltage *= (2*3.3/1024); // Conversion to voltage
-
-    // Print collected data to file
-    logfile = SD.open(filename, FILE_WRITE);
-
-    Serial.println(bmpReadings.altitude);
-
-    if (logfile) {
-        float* dataItem[21] = {&timeStamp, &bmpReadings.temp, &bmpReadings.pressure, &bmpReadings.altitude, &accelReadings.x, &accelReadings.y, &accelReadings.z, 
-      &magReadings.x, &magReadings.y, &magReadings.z, &gyroReadings.x, &gyroReadings.y, &gyroReadings.z, &oriReadings.oriRoll,  &oriReadings.oriPitch, &oriReadings.oriHeading,
-      &gpsReadings.gpsLat, &gpsReadings.gpsLong, &gpsReadings.gpsAlt, &gpsReadings.gpsVel, &batteryVoltage};
+  // Create IMU events
+  sensors_event_t accel_event; 
+  sensors_event_t mag_event;
     
-      for (int i = 0; i < NUM_DATA; i++) {
-        logfile.print(*dataItem[i], 4); // Print values to 4 dp
-        logfile.print(",");
-      }
+  getAccelData(accel_event);
+  getMagData(mag_event);
+  getGyroData();
     
-      logfile.println("");
-    
-      logfile.close(); // Save data
-    }
-    
-    // Check mission events
-    if (!deployed && (bmpReadings.altitude > 600)) {
-      // Note - this script version does not transmit so determining exact deployment time is unnecesasary
-      deployed = true;
-    }
+  getOrientationData(accel_event, mag_event);
+}
 
-    if (deployed && !altOne && (bmpReadings.altitude < 500)) {
-      // 500m descending mark triggered from barometer data, take two pictures
-      altOne = true;
-      camera.takePicture(); camera.takePicture();
-    }
+/**
+ * Takes acceleration readings from the IMU if the sensor is connected.
+ */
+void getAccelData(sensors_event_t accel_event) {
+  if (accel.begin()) {
+    accel.getEvent(&accel_event);
   
-    if (deployed && !altTwo && (gpsReadings.gpsAlt < 300)) {
-      // 300m descending mark triggered from GPS data, take two pictures
-      altTwo = true;
-      camera.takePicture(); camera.takePicture();
-    }
+    // Take readings in 3 dimensions
+    accelReadings.x = accel_event.acceleration.x;
+    accelReadings.y = accel_event.acceleration.y;
+    accelReadings.z = accel_event.acceleration.z;
+  }
+}
+
+/**
+ * Takes magnetic field readings from the IMU if the sensor is connected.
+ */
+void getMagData(sensors_event_t mag_event) {
+  if (mag.begin()) {
+    // Create event
+    mag.getEvent(&mag_event);
   
-    if (deployed && !altThree && (bmpReadings.altitude < 30)) {
-      // 30m descending mark triggered from barometer data, begin video
-      altThree = true;
-      // Start video landing
-      camera.toggleVideo();
-    }
+    // Take readings in 3 dimensions
+    magReadings.x = mag_event.magnetic.x;
+    magReadings.y = mag_event.magnetic.y;
+    magReadings.z = mag_event.magnetic.z;
+  }
+}
+
+/**
+ * Takes rotational motion readings from the IMU if the sensor is connected.
+ */
+void getGyroData() {
+  if (gyro.begin()) {
+    // Create event
+    sensors_event_t gyro_event;
+    gyro.getEvent(&gyro_event);
   
-    if (deployed && !landed && altThree && (bmpReadings.altitude < 5)) {
-      // 5m descending mark trigegred from barometer data
-      landed = true;
-      delay(5000); // Wait 5 seconds to esnure landed
-      camera.toggleVideo(); // End video
-      while (landed); // No transmission so end operation
+    // Take readings in 3 dimensions
+    gyroReadings.x = gyro_event.gyro.x;
+    gyroReadings.y = gyro_event.gyro.y;
+    gyroReadings.z = gyro_event.gyro.z;
+  }
+}
+
+/**
+ * Calculates orientation using accelerometer and magnetometer readings from the IMU.
+ */
+void getOrientationData(sensors_event_t accel_event, sensors_event_t mag_event) {
+  // Verify if orientation can be calculated
+  if (accel.begin() && mag.begin()) {
+    sensors_vec_t orientation;
+  
+    // Calculate orientation
+    if (dof.fusionGetOrientation(&accel_event, &mag_event, &orientation)) {
+      oriReadings.oriRoll = orientation.roll;
+      oriReadings.oriPitch = orientation.pitch;
+      oriReadings.oriHeading = orientation.heading;
     }
   }
 }
+
+/**
+ * Reads the battery voltage.
+ */
+void getBatteryVoltage() {
+  batteryVoltage = analogRead(VBATPIN);
+  batteryVoltage *= (2*3.3/1024); // Convert to voltage
+}
+
+/**
+ * Prints a row of sensor readings to a logfile in csv format.
+ */
+void printDataRowToLogfile() {
+  logfile = SD.open(filename, FILE_WRITE);
+
+  if (logfile) {
+    float* dataItem[21] = {&timeStamp, &bmpReadings.temp, &bmpReadings.pressure, &bmpReadings.altitude, &accelReadings.x, &accelReadings.y, &accelReadings.z, 
+      &magReadings.x, &magReadings.y, &magReadings.z, &gyroReadings.x, &gyroReadings.y, &gyroReadings.z, &oriReadings.oriRoll,  &oriReadings.oriPitch, &oriReadings.oriHeading,
+      &gpsReadings.gpsLat, &gpsReadings.gpsLong, &gpsReadings.gpsAlt, &gpsReadings.gpsVel, &batteryVoltage};
+    
+    for (int i = 0; i < NUM_DATA; i++) {
+      logfile.print(*dataItem[i], 4); // Print values to 4 dp
+      logfile.print(",");
+    }
+
+    logfile.println("");
+    logfile.close(); // Save data
+  }
+}
+
+/**
+ * Check if apogee has been reached using the barometer altitude
+ */
+void checkForParachuteDeployment() {
+  if (!deployed && (bmpReadings.altitude > 600)) {
+    // Note - this script version does not transmit so determining exact deployment time is unnecesasary
+    deployed = true;
+  }
+}
+
+/**
+ * Checks if the 500m descending mark has been reached using the barometer altitude.
+ */
+void checkFor500mDescending() {
+  if (deployed && !altOne && (bmpReadings.altitude < 500)) {
+    altOne = true;
+
+    // Take two pictures
+    camera.takePicture(); 
+    camera.takePicture();
+  }
+}
+
+/**
+ * Takes two pictures if the 500m descending mark has been reached (as determined by the GPS).
+ */
+void checkFor300mDescending() {
+  if (deployed && !altTwo && (gpsReadings.gpsAlt < 300)) {
+    altTwo = true;
+
+    // Take two pictures
+    camera.takePicture(); 
+    camera.takePicture();
+  }
+}
+
+/**
+ * Starts the video if the PSat is about to land.
+ */
+void checkFor30mDescending() {
+  if (deployed && !altThree && (bmpReadings.altitude < 30)) {
+    altThree = true;
+      
+    // Video landing
+    camera.toggleVideo();
+  }
+}
+
+/**
+ * Stops the video if the PSat has landed.
+ */
+void checkForLanding() {
+  if (deployed && !landed && altThree && (bmpReadings.altitude < 5)) {
+    // 5m descending mark trigegred from barometer data
+    landed = true;
+    delay(5000); // Wait 5 seconds to esnure landed
+    camera.toggleVideo(); // End video
+    while (landed); // No transmission so end operation
+  }
+}
+
