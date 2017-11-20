@@ -1,5 +1,4 @@
 function [] = MakeAndSavePlot( x, xLabel, y, yLabel, graphTitle, filename )
-% MakeAndSavePlot() Summary of this function goes here
 % Input:    x: Array of x values
 %           xLabel: String
 %           y: Array of y values
