@@ -1,4 +1,4 @@
-function [] = MakeAndSavePlot( x, xLabel, y, yLabel, graphTitle, filename )
+function [] = MakeAndSavePlot( x, xLabel, y, yLabel, graphTitle, pathname, filename )
 % Input:    x: Array of x values
 %           xLabel: String
 %           y: Array of y values
@@ -20,6 +20,5 @@ xlabel(xLabel); % Add label for x-axis
 ylabel(yLabel); % Add label for y-axis
 
 % Save plot
-saveas(gcf, filename)
-
+saveas(gcf, fullfile(pathname, filename)); % Saves and overwrites existing image
 end
