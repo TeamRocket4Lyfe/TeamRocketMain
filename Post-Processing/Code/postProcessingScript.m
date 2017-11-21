@@ -79,4 +79,5 @@ for i = 1:length(measurements)
     
     % Plot smoothed data
     plot(time, current);
+    xlim([0, time(end)]); % Set x-limits (can adjust to preference)
 end

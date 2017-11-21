@@ -14,6 +14,7 @@ function [] = MakeAndSavePlot( x, xLabel, y, yLabel, graphTitle, filename )
 
 % Make plot
 plot(x, y);
+xlim([0, x(end)]); % Set x-limits (can adjust to preference)
 title(graphTitle); % Add title
 xlabel(xLabel); % Add label for x-axis
 ylabel(yLabel); % Add label for y-axis
