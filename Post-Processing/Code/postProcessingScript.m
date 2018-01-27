@@ -12,8 +12,6 @@ clc; clear; close all;
 % Set path to data file
 filepath = 'DATA00.CSV';
 
-
-
 % Read data from csv file, ignoring headers
 data = csvread(filepath,1,0);
 
