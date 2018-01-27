@@ -28,6 +28,7 @@
 #define NUM_DATA 21
 #define GPSSerial Serial1
 #define GPS_BEGIN 9600
+#define SAMPLE_PERIOD 100  // in milliseconds
 
 // Create sensor structures
 struct gps_s {
@@ -202,10 +203,10 @@ bool checkForGPSSentence() {
 }
 
 /**
- * Checks that more than a second has passed since measurements were taken.
+ * Checks that more than the sample period has passed since measurements were taken.
  */
 bool readyToSample() {
-  if (millis() - timeStamp > 1000) {
+  if (millis() - timeStamp > SAMPLE_PERIOD) {
     return true;
   } else {
     return false;
