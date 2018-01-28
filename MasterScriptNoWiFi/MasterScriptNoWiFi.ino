@@ -29,6 +29,7 @@
 #define GPSSerial Serial1
 #define GPS_BEGIN 9600
 #define SAMPLE_PERIOD 100  // in milliseconds
+#define PRESSURE_RECORD_TIME 5000 // in milliseconds
 
 // Create sensor structures
 struct gps_s {
@@ -185,8 +186,10 @@ void printDataHeadingsInLogfile() {
  * Records the ground pressure to use as a reference
  */
 void recordGroundPressure() {
-  bmpReadings.groundPressure = bmp.readPressure()/100; // Convert to hectopascals/millibars
-  bmpReadings.groundPressure = bmp.readPressure()/100;
+  float startTime = millis();
+  while ((bmpReadings.groundPressure < 0.9*1013.25) || (bmpReadings.groundPressure > 1.1*1013.25) || (millis() < startTime + PRESSURE_RECORD_TIME)) {
+    bmpReadings.groundPressure = bmp.readPressure()/100; // Convert to hectopascals/millibars
+  }
 }
 
 /**
@@ -347,7 +350,7 @@ void printDataRowToLogfile() {
  * Check if apogee has been reached using the barometer altitude
  */
 void checkForParachuteDeployment() {
-  if (!deployed && (bmpReadings.altitude > 600)) {
+  if (!deployed && ((bmpReadings.altitude > 600) || (gpsReadings.gpsAlt > 600))) {
     // Note - this script version does not transmit so determining exact deployment time is unnecesasary
     deployed = true;
   }
@@ -383,7 +386,7 @@ void checkFor300mDescending() {
  * Starts the video if the PSat is about to land.
  */
 void checkFor30mDescending() {
-  if (deployed && !altThree && (bmpReadings.altitude < 30)) {
+  if (deployed && !altThree && (bmpReadings.altitude < 100)) {
     altThree = true;
       
     // Video landing
@@ -395,7 +398,7 @@ void checkFor30mDescending() {
  * Stops the video if the PSat has landed.
  */
 void checkForLanding() {
-  if (deployed && !landed && altThree && (bmpReadings.altitude < 5)) {
+  if (!landed && altThree && (bmpReadings.altitude < 5)) {
     // 5m descending mark trigegred from barometer data
     landed = true;
     delay(5000); // Wait 5 seconds to esnure landed
