@@ -190,8 +190,8 @@ void printDataHeadingsInLogfile() {
 void recordGroundPressure() {
   
   float startTime = millis();
-  bmpReadings.groundPressure = bmp.readPressure()/100;
-  while ((bmpReadings.groundPressure < 0.9*1013.25) || (bmpReadings.groundPressure > 1.1*1013.25) || (millis() < startTime + PRESSURE_RECORD_TIME)) {
+  bmpReadings.groundPressure = bmp.readPressure()/100; // Convert to hectopascals/millibars
+  while (((bmpReadings.groundPressure < 0.9*1013.25) || (bmpReadings.groundPressure > 1.1*1013.25)) && (millis() < startTime + PRESSURE_RECORD_TIME)) {
     bmpReadings.groundPressure = bmp.readPressure()/100; // Convert to hectopascals/millibars
   }
 }
