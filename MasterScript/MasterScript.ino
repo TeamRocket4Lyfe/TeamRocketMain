@@ -76,6 +76,8 @@ struct bmp_s {
   float altitude;
 } bmpReadings;
 
+float maxAltitude;
+
 // Assign a unique ID to the sensors
 Adafruit_GPS GPS(&GPSSerial);
 Adafruit_9DOF dof = Adafruit_9DOF();
@@ -151,6 +153,7 @@ void loop() {
     
       // Take pictures at mission events
       checkForParachuteDeployment();
+      checkForApogee();
       checkFor500mDescending();
       checkFor300mDescending();
       checkFor30mDescending();
@@ -278,6 +281,11 @@ void getBMPData() {
     bmpReadings.temp = bmp.readTemperature();
     bmpReadings.pressure = (float) bmp.readPressure();  
     bmpReadings.altitude = bmp.readAltitude(bmpReadings.groundPressure);
+
+    // Update maximum altitude reached
+    if (bmpReadings.altitude > maxAltitude) {
+      maxAltitude = bmpReadings.altitude;
+    }
   }
 }
 
@@ -441,6 +449,16 @@ void checkForParachuteDeployment() {
   if (!deployed && (bmpReadings.altitude > 600)) {
     // Note - this script version does not transmit so determining exact deployment time is unnecesasary
     deployed = true;
+  }
+}
+
+/**
+ * Check if apogee has been reached by checking if PSat is less than 95% of maximum altitude and greater than 90% of maximum altitude
+ */
+void checkForApogee() {
+  if (bmpReadings.altitude < 0.95*maxAltitude) && bmpReadings.altitude > 0.9*maxAltitude) {
+    // Take one picture
+    camera.takePicture();
   }
 }
 
