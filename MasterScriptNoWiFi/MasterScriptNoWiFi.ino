@@ -368,7 +368,7 @@ void checkForParachuteDeployment() {
  * Check if apogee has been reached by checking if PSat is less than 95% of maximum altitude and greater than 90% of maximum altitude
  */
 void checkForApogee() {
-  if (bmpReadings.altitude < 0.95*maxAltitude) && bmpReadings.altitude > 0.9*maxAltitude) {
+  if (bmpReadings.altitude < 0.95*maxAltitude && bmpReadings.altitude > 0.9*maxAltitude) {
     // Take one picture
     camera.takePicture();
   }
