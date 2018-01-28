@@ -76,7 +76,7 @@ struct bmp_s {
   float altitude;
 } bmpReadings;
 
-float maxAltitude;
+float maxAltitude= 50;
 
 // Assign a unique ID to the sensors
 Adafruit_GPS GPS(&GPSSerial);
@@ -232,6 +232,7 @@ void printDataHeadingsInLogfile() {
  */
 void recordGroundPressure() {
   float startTime = millis();
+  bmpReadings.groundPressure = bmp.readPressure()/100;
   while ((bmpReadings.groundPressure < 0.9*1013.25) || (bmpReadings.groundPressure > 1.1*1013.25) || (millis() < startTime + PRESSURE_RECORD_TIME)) {
     bmpReadings.groundPressure = bmp.readPressure()/100; // Convert to hectopascals/millibars
   }
@@ -507,7 +508,7 @@ void checkForLanding() {
   if (!landed && altThree && (bmpReadings.altitude < 5)) {
     // 5m descending mark trigegred from barometer data
     landed = true;
-    delay(5000); // Wait 5 seconds to esnure landed
+    delay(5000); // Wait 5 seconds to ensure landed
     camera.toggleVideo(); // End video
     while (landed); // No transmission so end operation
   }

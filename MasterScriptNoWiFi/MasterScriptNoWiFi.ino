@@ -71,7 +71,7 @@ struct bmp_s {
   float altitude;
 } bmpReadings;
 
-float maxAltitude;
+float maxAltitude = 50;
 
 // Assign a unique ID to the sensors
 Adafruit_GPS GPS(&GPSSerial);
@@ -172,7 +172,6 @@ void initialiseGPS() {
   * Prints a heading into the logfile to indicate which column corresponds to which sensor reading
   */
 void printDataHeadingsInLogfile() {
-  
   // Create and open data file for writing
   logfile = SD.open(filename, FILE_WRITE);
 
@@ -189,7 +188,9 @@ void printDataHeadingsInLogfile() {
  * Records the ground pressure to use as a reference
  */
 void recordGroundPressure() {
+  
   float startTime = millis();
+  bmpReadings.groundPressure = bmp.readPressure()/100;
   while ((bmpReadings.groundPressure < 0.9*1013.25) || (bmpReadings.groundPressure > 1.1*1013.25) || (millis() < startTime + PRESSURE_RECORD_TIME)) {
     bmpReadings.groundPressure = bmp.readPressure()/100; // Convert to hectopascals/millibars
   }
